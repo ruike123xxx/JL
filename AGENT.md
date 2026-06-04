@@ -24,7 +24,7 @@ RPA POST /reply
        3. app/core/prompt.py     拼 system + user 提示词
        4. app/llm/base.py        按配置取 provider
           app/llm/mock.py         (默认) 返回假 JSON
-          app/llm/tongyi.py       (可选) 调真实模型
+          app/llm/tongyi.py       (可选) 调 OpenAI 兼容真实模型
        5. app/core/json_repair.py 容错解析模型返回 → ReplyResponse
        6. app/store/db.py        更新 stage + 简历快照
   → 返回 JSON (answer + reason.rpa_action) 给 RPA
@@ -49,7 +49,7 @@ RPA POST /reply
 - **职责边界**：RPA 只读写网页，Python 负责所有"思考"。不要把决策逻辑推回 RPA。
 - **`rpa_action` 是机器可读枚举**：合法值定义在 [app/schemas.py](app/schemas.py) 的 `RPA_ACTIONS`。新增动作必须同时改这里和 mock/真实 prompt。
 - **`stage` 不由 RPA 传**：由 Python 按 `candidate_id` 从 SQLite 维护。
-- **模型可插拔**：换模型只改 `.env` + 加一个 `app/llm/xxx.py`，业务逻辑（pipeline）不感知具体模型。
+- **模型可插拔**：DeepSeek/通义/豆包等 OpenAI 兼容模型通常只改 `.env`，新增非兼容模型再加 `app/llm/xxx.py`，业务逻辑（pipeline）不感知具体模型。
 - **JSON 解析永不抛错**：[app/core/json_repair.py](app/core/json_repair.py) 最差返回人工接管兜底。
 - **数据库是 SQLite 本地文件**：零部署，自动建表。换数据库只改 [app/store/db.py](app/store/db.py)。
 

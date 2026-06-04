@@ -79,11 +79,11 @@ pytest tests/
 ```
 LLM_PROVIDER=tongyi
 LLM_API_KEY=你的key
-LLM_MODEL=qwen-plus
-LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+LLM_MODEL=deepseek-v4-pro
+LLM_BASE_URL=https://api.deepseek.com
 ```
 
-换 DeepSeek/豆包通常只改这三行(base_url/model/key), 代码无需改动。详见 [app/llm/tongyi.py](app/llm/tongyi.py)。
+`tongyi` 这里实际是 OpenAI 兼容接口 provider；换通义/豆包通常只改 base_url/model/key，代码无需改动。详见 [app/llm/tongyi.py](app/llm/tongyi.py)。
 
 ## 目录
 
