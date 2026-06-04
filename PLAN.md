@@ -17,7 +17,7 @@
 ### 2. RPA 端对接联调
 - [ ] RPA 流程加 HTTP POST 节点指向 `localhost:8000/reply`
 - [ ] 验证 RPA 能稳定抓取「当前窗口全部可见对话」并正确填入 `conversation`
-- [ ] 验证 RPA 按 `reason.rpa_action` 分支：先发 `answer`，再执行 request_resume / send_company_address / confirm_interview_time
+- [ ] 验证 RPA 按 `reason.rpa_action` 分支：reply_message 发送 answer，request_resume / send_company_address 执行预设动作
 - [ ] 确认中文经 HTTP 往返无乱码（终端乱码是显示问题，HTTP 数据为 UTF-8）
 
 ---

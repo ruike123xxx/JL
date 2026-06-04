@@ -19,6 +19,31 @@ python run.py             # 启动在 http://127.0.0.1:8000
 
 ## 接口
 
+### POST /rpa/conversation  (影刀第一步联调)
+
+用于验证影刀已经成功抓取对话记录，并把文本传到本服务。该接口只返回接收回执，不调用大模型，不生成回复。
+
+请求体:
+
+```json
+{
+  "candidate_id": "boss_user_12345",
+  "conversation": "影刀抓取的当前窗口全部可见对话文本"
+}
+```
+
+响应体:
+
+```json
+{
+  "candidate_id": "boss_user_12345",
+  "received": true,
+  "conversation_chars": 28,
+  "stage": "初次接触",
+  "next_endpoint": "/reply"
+}
+```
+
 ### POST /reply  (RPA 主接口)
 
 请求体:
@@ -39,16 +64,15 @@ python run.py             # 启动在 http://127.0.0.1:8000
 
 ```json
 {
-  "answer": "给候选人的回复内容",
+  "answer": "只有 rpa_action 为 reply_message 时这里才有内容",
   "reason": {
-    "reply_intent": "索要简历/推进面试/补充岗位信息/确认匹配度",
-    "rpa_action": "request_resume | send_company_address | confirm_interview_time | none",
+    "rpa_action": "reply_message | request_resume | send_company_address",
     "basis": "依据说明"
   }
 }
 ```
 
-RPA 拿到后: **先发送 `answer`, 再用 if 判断 `reason.rpa_action` 决定是否执行后续动作**(索要简历、发地址、约面)。
+RPA 拿到后按 `reason.rpa_action` 分支：`reply_message` 表示发送 `answer`；`request_resume` 表示索要简历且 `answer` 为空；`send_company_address` 表示发送地址且 `answer` 为空。
 
 ### POST /reset  (调试用)
 

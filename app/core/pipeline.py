@@ -1,4 +1,5 @@
 """主编排: 读状态 -> 合并简历 -> 拼 prompt -> 调模型 -> 解析 -> 更新状态 -> 返回。"""
+
 from app.core.json_repair import parse_reply
 from app.core.prompt import build_messages
 from app.llm.base import get_provider
@@ -9,7 +10,6 @@ from app.store import db
 _STAGE_BY_ACTION = {
     "request_resume": "等待简历",
     "send_company_address": "约面中",
-    "confirm_interview_time": "约面中",
 }
 
 

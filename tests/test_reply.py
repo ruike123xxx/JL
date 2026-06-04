@@ -1,4 +1,5 @@
 """端到端测试: 用 mock provider 跑通 /reply, 断言返回结构与分支。"""
+
 import os
 import tempfile
 
@@ -43,14 +44,16 @@ def test_response_shape(client):
     r = _post(client)
     assert r.status_code == 200
     data = r.json()
-    assert "answer" in data and data["answer"]
+    assert "answer" in data
     assert "reason" in data
-    assert set(data["reason"]) == {"reply_intent", "rpa_action", "basis"}
+    assert set(data["reason"]) == {"rpa_action", "basis"}
 
 
 def test_no_resume_triggers_request_resume(client):
     r = _post(client, resume="")
-    assert r.json()["reason"]["rpa_action"] == "request_resume"
+    data = r.json()
+    assert data["answer"] == ""
+    assert data["reason"]["rpa_action"] == "request_resume"
 
 
 def test_ask_address_triggers_send_address(client):
@@ -59,13 +62,38 @@ def test_ask_address_triggers_send_address(client):
         resume="5年Java经验，做过电商后台",
         conversation="公司面试地点在哪里？怎么去？",
     )
-    assert r.json()["reason"]["rpa_action"] == "send_company_address"
+    data = r.json()
+    assert data["answer"] == ""
+    assert data["reason"]["rpa_action"] == "send_company_address"
+
+
+def test_reply_message_has_answer(client):
+    r = _post(client, resume="5年Java经验", conversation="我想了解岗位技术栈")
+    data = r.json()
+    assert data["answer"]
+    assert data["reason"]["rpa_action"] == "reply_message"
 
 
 def test_rpa_action_always_valid(client):
-    valid = {"none", "request_resume", "send_company_address", "confirm_interview_time"}
+    valid = {"reply_message", "request_resume", "send_company_address"}
     r = _post(client, resume="有经验", conversation="随便聊聊")
     assert r.json()["reason"]["rpa_action"] in valid
+
+
+def test_ingest_conversation_ack(client):
+    conversation = "候选人：你好，我想了解下这个岗位\nHR：您好"
+    r = client.post(
+        "/rpa/conversation",
+        json={"candidate_id": "yingdao_1", "conversation": conversation},
+    )
+    assert r.status_code == 200
+    assert r.json() == {
+        "candidate_id": "yingdao_1",
+        "received": True,
+        "conversation_chars": len(conversation),
+        "stage": "初次接触",
+        "next_endpoint": "/reply",
+    }
 
 
 def test_reset(client):

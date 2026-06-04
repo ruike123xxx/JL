@@ -24,7 +24,8 @@
 模型返回不可信（markdown 包裹 / 前后加文字 / 字段缺失 / 非法 action），这里负责"永不抛错地"解析。
 - `_extract_json(text)` —— 去 ```json 围栏 → 直接 `json.loads` → 失败则正则抠第一个 `{...}` 块
 - `parse_reply(raw) -> ReplyResponse` —— 解析 + 校验 + 补默认值：
-  - `rpa_action` 不在 `RPA_ACTIONS` 内 → 归一为 `none`
+  - `rpa_action` 不在 `RPA_ACTIONS` 内 → 归一为 `reply_message`
+  - `rpa_action` 不是 `reply_message` 时 → 强制清空 `answer`
   - 兼容 `reason` 为字符串的"最简版"输出
   - 彻底解析失败 → 返回安全的人工接管兜底文案
 - **这是纯 RPA 几乎做不到、而 Python 必须做的关键模块。**

@@ -6,8 +6,9 @@
 - 字段缺失 / rpa_action 给了非法值
 
 策略: 先直接 json.loads; 失败则抠出第一个 {...} 块再解析;
-最后用 Pydantic 校验并补默认值, 非法的 rpa_action 归一为 none。
+最后用 Pydantic 校验并补默认值, 非法的 rpa_action 归一为 reply_message。
 """
+
 import json
 import re
 
@@ -45,25 +46,25 @@ def parse_reply(raw: str) -> ReplyResponse:
     reason_raw = data.get("reason", {})
     if isinstance(reason_raw, str):
         # 兼容最简版: reason 是一段文字
-        reason = ReplyReason(reply_intent="", rpa_action="none", basis=reason_raw)
+        reason = ReplyReason(rpa_action="reply_message", basis=reason_raw)
     elif isinstance(reason_raw, dict):
-        action = str(reason_raw.get("rpa_action", "none")).strip()
+        action = str(reason_raw.get("rpa_action", "reply_message")).strip()
         if action not in RPA_ACTIONS:
-            action = "none"
+            action = "reply_message"
         reason = ReplyReason(
-            reply_intent=str(reason_raw.get("reply_intent", "")).strip(),
             rpa_action=action,
             basis=str(reason_raw.get("basis", "")).strip(),
         )
     else:
         reason = ReplyReason()
 
-    if not answer:
-        # 兜底: 解析彻底失败时, 给一个安全的人工接管提示
+    if reason.rpa_action != "reply_message":
+        answer = ""
+    elif not answer:
+        # 兜底: 解析彻底失败或 reply_message 缺少 answer 时, 给一个安全提示
         answer = "您好，感谢您的消息，我稍后回复您。"
         reason = ReplyReason(
-            reply_intent="解析失败兜底",
-            rpa_action="none",
+            rpa_action="reply_message",
             basis="模型返回无法解析为有效JSON",
         )
 
