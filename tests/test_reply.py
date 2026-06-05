@@ -49,11 +49,19 @@ def test_response_shape(client):
     assert set(data["reason"]) == {"rpa_action", "basis"}
 
 
-def test_no_resume_triggers_request_resume(client):
+def test_reply_missing_candidate_id_returns_hint(client):
+    r = client.post("/reply", json={"conversation": "你好"})
+    assert r.status_code == 422
+    data = r.json()
+    assert data["error"] == "请求体不符合接口要求"
+    assert data["expected_body"]["candidate_id"] == "boss_user_12345"
+
+
+def test_no_resume_still_replies_message(client):
     r = _post(client, resume="")
     data = r.json()
-    assert data["answer"] == ""
-    assert data["reason"]["rpa_action"] == "request_resume"
+    assert data["answer"]
+    assert data["reason"]["rpa_action"] == "reply_message"
 
 
 def test_ask_address_triggers_send_address(client):
@@ -74,8 +82,22 @@ def test_reply_message_has_answer(client):
     assert data["reason"]["rpa_action"] == "reply_message"
 
 
+def test_low_score_resume_returns_filter_message(client):
+    r = _post(
+        client,
+        resume="英语老师，主要负责一对一英语教学和课程规划",
+        conversation="您好，我对岗位感兴趣",
+        job_requirement="Java后端开发，熟悉Spring Boot和MySQL",
+    )
+    data = r.json()
+    assert set(data) == {"answer", "reason"}
+    assert data["reason"]["rpa_action"] == "reply_message"
+    assert "暂时先不进一步安排沟通" in data["answer"]
+    assert "低于60分" in data["reason"]["basis"]
+
+
 def test_rpa_action_always_valid(client):
-    valid = {"reply_message", "request_resume", "send_company_address"}
+    valid = {"reply_message", "send_company_address"}
     r = _post(client, resume="有经验", conversation="随便聊聊")
     assert r.json()["reason"]["rpa_action"] in valid
 

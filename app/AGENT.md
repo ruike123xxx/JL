@@ -8,6 +8,7 @@
 FastAPI 应用入口。
 - 创建 `app` 实例，注册 [api/routes.py](api/routes.py) 的路由。
 - `lifespan`：启动时调用 `db.init_db()` 建表。
+- 注册 `RequestValidationError` 处理器，让影刀请求体不符合接口时返回清晰的 422 调试提示。
 - 暴露 `GET /health` 健康检查。
 - `run.py` 通过 `app.main:app` 启动它。
 
@@ -23,7 +24,7 @@ FastAPI 应用入口。
 
 ### schemas.py
 全项目的 Pydantic 数据模型 + 枚举。**新增字段/动作的源头在这里。**
-- `RPA_ACTIONS` — 合法 RPA 动作集合：`reply_message` / `request_resume` / `send_company_address`。新增动作必须先改这里。
+- `RPA_ACTIONS` — 合法 RPA 动作集合：`reply_message` / `send_company_address`。新增动作必须先改这里。
 - `DEFAULT_STAGE` — 默认招聘阶段 `"初次接触"`。
 - `ReplyRequest` — RPA 发来的请求体（candidate_id / conversation / resume / job_requirement / company_info）。注意 **不含 stage**。
 - `ReplyReason` — 模型输出的结构化动作与依据（rpa_action / basis）。

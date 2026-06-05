@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field
 # 合法的 RPA 动作枚举 (影刀端按这些值分支)
 RPA_ACTIONS = {
     "reply_message",  # 只发送 answer, 不做额外动作
-    "request_resume",  # 索要简历
     "send_company_address",  # 发送公司地址
 }
 

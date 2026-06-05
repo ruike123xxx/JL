@@ -1,7 +1,11 @@
 """FastAPI 应用入口。"""
+
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from app.api.routes import router
 from app.store import db
@@ -21,6 +25,27 @@ app = FastAPI(
 )
 
 app.include_router(router)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(_request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content=jsonable_encoder(
+            {
+                "error": "请求体不符合接口要求",
+                "hint": "POST /reply 必须使用 application/json，并至少包含 candidate_id。其它字段可传空字符串。",
+                "expected_body": {
+                    "candidate_id": "boss_user_12345",
+                    "conversation": "影刀抓取的当前窗口全部可见对话文本",
+                    "resume": "",
+                    "job_requirement": "岗位招聘需求",
+                    "company_info": "公司信息",
+                },
+                "detail": exc.errors(),
+            }
+        ),
+    )
 
 
 @app.get("/health")

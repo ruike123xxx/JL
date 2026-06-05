@@ -1,7 +1,6 @@
 """Mock provider: 返回结构合法的假 JSON, 用于和 RPA 联调。
 
 根据 user 提示词里的内容做简单规则判断, 让联调时能看到不同的 rpa_action 分支:
-- 简历为空            -> request_resume
 - 提到地址/面试地点   -> send_company_address
 - 其它                -> reply_message
 
@@ -22,20 +21,7 @@ class MockProvider(LLMProvider):
     def generate(self, system: str, user: str) -> str:
         text = user
 
-        # 简历是否缺失: prompt 里简历段落为空时的简单探测
-        resume_missing = (
-            "候选人简历内容：\n\n" in user or "候选人简历内容：\n（无）" in user
-        )
-
-        if resume_missing:
-            result = {
-                "answer": "",
-                "reason": {
-                    "rpa_action": "request_resume",
-                    "basis": "候选人尚未提供简历，无法判断匹配度",
-                },
-            }
-        elif _has(text, "地址", "面试地点", "怎么去", "在哪", "到场"):
+        if _has(text, "地址", "面试地点", "怎么去", "在哪", "到场"):
             result = {
                 "answer": "",
                 "reason": {

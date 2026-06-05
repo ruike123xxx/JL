@@ -17,7 +17,7 @@
 ### 2. RPA 端对接联调
 - [ ] RPA 流程加 HTTP POST 节点指向 `localhost:8000/reply`
 - [ ] 验证 RPA 能稳定抓取「当前窗口全部可见对话」并正确填入 `conversation`
-- [ ] 验证 RPA 按 `reason.rpa_action` 分支：reply_message 发送 answer，request_resume / send_company_address 执行预设动作
+- [ ] 验证 RPA 按 `reason.rpa_action` 分支：reply_message 发送 answer，send_company_address 执行预设动作；索要简历由影刀主流程处理
 - [ ] 确认中文经 HTTP 往返无乱码（终端乱码是显示问题，HTTP 数据为 UTF-8）
 
 ---
@@ -26,12 +26,12 @@
 
 ### 3. stage 招聘阶段状态机细化
 - [ ] 当前是简单映射（[app/core/pipeline.py](app/core/pipeline.py) 的 `_STAGE_BY_ACTION`）
-- [ ] 细化为：`初次接触 → 等待简历 → 意向确认 → 约面中 → 已约面 → 已结束`
+- [ ] 细化为：`初次接触 → 意向确认 → 约面中 → 已约面 → 已结束`
 - [ ] 把 stage 作为上下文更明确地喂给模型，让不同阶段回复策略不同
 - [ ] 防回退：已约面不应因一句闲聊退回初次接触
 
 ### 4. 简历处理增强
-- [ ] 当前只判断「有/无简历」。若需结合简历内容提问，确认 RPA 抓取的简历文本质量
+- [ ] 当前后端不再判断是否索要简历；若需结合简历内容提问，确认 RPA 抓取的简历文本质量
 - [ ] （可选）若 RPA 难以抓全，改为 Python 解析简历 PDF（加 pdfplumber 依赖，需传文件路径）
 
 ### 5. 提示词迭代

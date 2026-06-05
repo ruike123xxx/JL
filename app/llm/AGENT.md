@@ -12,11 +12,10 @@
 
 ### mock.py —— 假数据 provider（默认启用）
 不调任何真实模型，按 user 提示词内容做简单关键词规则，返回结构合法的假 JSON，让 RPA 联调时能看到不同分支：
-- 简历缺失 → `request_resume`
 - 含"地址/面试地点/怎么去/在哪/到场" → `send_company_address`
 - 其它 → `reply_message`
 
-只有 `reply_message` 会返回非空 `answer`；`request_resume` / `send_company_address` 的 `answer` 为空，由影刀执行预设动作。
+只有 `reply_message` 会返回非空 `answer`；`send_company_address` 的 `answer` 为空，由影刀执行预设动作。索要简历由影刀主流程处理。
 
 用于无 key 联调与单元测试。**改 mock 行为不影响真实模型逻辑。**
 
