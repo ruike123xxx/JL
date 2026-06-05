@@ -21,17 +21,17 @@ def handle_reply(req: ReplyRequest) -> ReplyResponse:
     # 2. 合并简历: 本轮有则用本轮并更新; 本轮空则复用库里的
     resume = req.resume.strip() or session["resume"]
 
-    if resume:
-        score = score_resume(resume=resume, job_requirement=req.job_requirement)
-        if not score.passed:
-            db.upsert_session(req.candidate_id, stage, resume)
-            return ReplyResponse(
-                answer=LOW_SCORE_MESSAGE,
-                reason=ReplyReason(
-                    rpa_action="reply_message",
-                    basis=f"简历评分{score.total}分低于{SCORE_PASS_THRESHOLD}分，暂不推进",
-                ),
-            )
+    # if resume:
+    #     score = score_resume(resume=resume, job_requirement=req.job_requirement)
+    #     if not score.passed:
+    #         db.upsert_session(req.candidate_id, stage, resume)
+    #         return ReplyResponse(
+    #             answer=LOW_SCORE_MESSAGE,
+    #             reason=ReplyReason(
+    #                 rpa_action="reply_message",
+    #                 basis=f"简历评分{score.total}分低于{SCORE_PASS_THRESHOLD}分，暂不推进",
+    #             ),
+    #         )
 
     # 3. 拼 prompt
     system, user = build_messages(
