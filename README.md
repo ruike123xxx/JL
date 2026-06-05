@@ -78,6 +78,33 @@ RPA 拿到后按 `reason.rpa_action` 分支：`reply_message` 表示发送 `answ
 
 如果返回 `422 Unprocessable Entity`，说明请求体还没通过 FastAPI 校验，业务逻辑不会进入 `handle_reply()`。请确认影刀 HTTP 节点使用 `application/json`，并至少传入 `candidate_id`。
 
+影刀 Python 请求示例：
+
+```python
+import requests
+all_chat_text = "全部对话记录"
+resume_person = "候选人简历"
+job_requirement = "岗位招聘需求"
+company_info = "公司信息"
+payload = {
+    "candidate_id": "test_001",
+    "conversation": all_chat_text,
+    "resume": resume_person,
+    "job_requirement": job_requirement,
+    "company_info": company_info,
+}
+
+headers = {
+    "Content-Type": "application/json",
+}
+
+resp = requests.post(
+    "http://127.0.0.1:8000/reply",
+    json=payload,
+    headers=headers,
+)
+```
+
 ### POST /reset  (调试用)
 
 ```json
