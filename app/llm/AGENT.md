@@ -1,13 +1,13 @@
 # app/llm/ — 大模型 provider 层（可插拔）
 
 把"调哪个模型"与业务逻辑解耦。pipeline 只调抽象接口，不知道背后是 mock 还是真实模型。
-**DeepSeek/通义/豆包等 OpenAI 兼容模型通常只改 `.env`；新增非兼容模型才加 provider 文件并在 base.py 注册。**
+**阿里云 Qwen 用 `aliyun` provider；DeepSeek/通义/豆包等 OpenAI 兼容模型通常只改 `.env`；新增非兼容模型才加 provider 文件并在 base.py 注册。**
 
 ## 文件
 
 ### base.py —— 抽象接口 + 工厂
 - `LLMProvider`（ABC）—— 统一接口，唯一方法 `generate(system: str, user: str) -> str`，返回模型**原始文本**（期望是 JSON 字符串，解析交给 [core/json_repair.py](../core/json_repair.py)）。
-- `get_provider() -> LLMProvider` —— 按 `settings.llm_provider` 选实例：`mock` → `MockProvider`，`tongyi` → `TongyiProvider`（OpenAI 兼容接口，可接 DeepSeek/通义/豆包），未知值抛错。
+- `get_provider() -> LLMProvider` —— 按 `settings.llm_provider` 选实例：`mock` → `MockProvider`，`tongyi` → `TongyiProvider`，`aliyun` → `AliyunProvider`，未知值抛错。
   - **新增 provider 在这里注册一个分支。**
 
 ### mock.py —— 假数据 provider（默认启用）
@@ -26,6 +26,12 @@
 - 发 `system + user` 两条消息，请求 `response_format={"type":"json_object"}`
 - 取 `choices[0].message.content` 返回
 - 待补（见 [PLAN.md](../../PLAN.md) P0 第 1 项）：超时重试、429 限流处理、失败兜底；个别模型不支持 json_object 时去掉该参数靠 json_repair 兜底。
+
+### aliyun.py —— 阿里云 Qwen provider
+`AliyunProvider.generate()` 调阿里云百炼 DashScope OpenAI 兼容 Chat Completions 接口。
+- 文本模型默认建议：`LLM_MODEL=qwen3-vl-plus`
+- 视觉/视频模型默认建议：`LLM_VISION_MODEL=qwen3-vl-plus`
+- `generate_with_image_url()` / `generate_with_video_url()` 可让 `/resume/evaluate` 用图片或视频 URL / data URL 直接评价简历
 
 ## 新增一个 provider 的步骤
 1. 新建 `app/llm/<name>.py`，写一个继承 `LLMProvider` 的类，实现 `generate()`

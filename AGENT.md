@@ -14,6 +14,7 @@ RPA 发送回复 / 发地址  ◀──JSON(answer+rpa_action)──  本项目
 ```
 
 影刀第一步联调用 `POST /rpa/conversation`，只上传并确认收到对话文本，不触发大模型；正式生成回复仍用 `POST /reply`。
+图片/视频简历单独评价用 `POST /resume/evaluate`，可传 OCR 文本，也可配置阿里云 Qwen VL 后传图片或视频 URL。
 
 ## 一次 /reply 请求的完整数据流
 
@@ -27,8 +28,9 @@ RPA POST /reply
        4. app/core/prompt.py     拼 system + user 提示词
        5. app/llm/base.py        按配置取 provider
           app/llm/mock.py         (默认) 返回假 JSON
-          app/llm/tongyi.py       (可选) 调 OpenAI 兼容真实模型
-       6. app/core/json_repair.py 容错解析模型返回 → ReplyResponse
+          app/llm/aliyun.py       (可选) 调阿里云 Qwen 文本/视觉/视频模型
+          app/llm/tongyi.py       (可选) 调其它 OpenAI 兼容真实模型
+       6. app/core/json_repair.py 校验解析模型返回；不合规时修复一次
        7. app/store/db.py        更新 stage + 简历快照
   → 返回 JSON (answer + reason.rpa_action) 给 RPA，只有 reply_message 时 answer 有内容
 ```
@@ -41,7 +43,7 @@ RPA POST /reply
 | [config.py](app/config.py) | 集中配置 (读 .env) | 见 [app/AGENT.md](app/AGENT.md) |
 | [schemas.py](app/schemas.py) | 请求/响应模型 + RPA 动作枚举 | 见 [app/AGENT.md](app/AGENT.md) |
 | [app/main.py](app/main.py) | FastAPI 入口 | 见 [app/AGENT.md](app/AGENT.md) |
-| [app/api/](app/api/) | HTTP 路由层（`/rpa/conversation`、`/reply`、`/reset`） | 见 [app/api/AGENT.md](app/api/AGENT.md) |
+| [app/api/](app/api/) | HTTP 路由层（`/rpa/conversation`、`/reply`、`/resume/evaluate`、`/reset`） | 见 [app/api/AGENT.md](app/api/AGENT.md) |
 | [app/core/](app/core/) | 业务核心：prompt / 解析 / 编排 | 见 [app/core/AGENT.md](app/core/AGENT.md) |
 | [app/llm/](app/llm/) | 大模型 provider 层（可插拔） | 见 [app/llm/AGENT.md](app/llm/AGENT.md) |
 | [app/store/](app/store/) | SQLite 会话状态存储 | 见 [app/store/AGENT.md](app/store/AGENT.md) |
@@ -52,10 +54,10 @@ RPA POST /reply
 - **职责边界**：RPA 只读写网页，Python 负责所有"思考"。不要把决策逻辑推回 RPA。
 - **`rpa_action` 是机器可读枚举**：合法值定义在 [app/schemas.py](app/schemas.py) 的 `RPA_ACTIONS`（`reply_message` / `send_company_address`）。新增动作必须同时改这里和 mock/真实 prompt。
 - **`stage` 不由 RPA 传**：由 Python 按 `candidate_id` 从 SQLite 维护。
-- **模型可插拔**：DeepSeek/通义/豆包等 OpenAI 兼容模型通常只改 `.env`，新增非兼容模型再加 `app/llm/xxx.py`，业务逻辑（pipeline）不感知具体模型。
+- **模型可插拔**：阿里云 Qwen 用 `LLM_PROVIDER=aliyun`；DeepSeek/通义/豆包等 OpenAI 兼容模型可用通用 provider 或新增 `app/llm/xxx.py`，业务逻辑（pipeline）不感知具体模型。
 - **影刀执行动作**：Python 只返回 `rpa_action`，影刀按返回值用 if 分支执行发消息、发地址；索要简历由影刀主流程自行处理。
 - **简历评分先行**：已有简历时先评分，低于 60 分直接返回过滤话术；评分细节暂不返回给影刀。
-- **JSON 解析永不抛错**：[app/core/json_repair.py](app/core/json_repair.py) 最差返回人工接管兜底。
+- **JSON 解析永不抛错**：[app/core/json_repair.py](app/core/json_repair.py) 会先校验结构，不合规时让模型修复一次，最差返回人工接管兜底。
 - **数据库是 SQLite 本地文件**：零部署，自动建表。换数据库只改 [app/store/db.py](app/store/db.py)。
 
 ## 常用命令

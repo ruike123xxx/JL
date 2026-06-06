@@ -40,6 +40,19 @@ SCORING_USER_TEMPLATE = """岗位要求：
 
 请按评分规则输出严格 JSON。"""
 
+MEDIA_SCORING_PROMPT_TEMPLATE = """请读取{{media_label}}中的简历内容，并评价它与岗位要求的匹配度。
+
+岗位要求：
+{{job_requirement}}
+
+请按以下 JSON 格式输出，不要输出 Markdown 或额外解释：
+{
+  "score": 0,
+  "basis": "一句话说明评分依据",
+  "matched": ["匹配点1", "匹配点2"],
+  "risks": ["风险点1", "风险点2"]
+}"""
+
 
 @dataclass(frozen=True)
 class ResumeScore:
@@ -66,6 +79,46 @@ def score_resume(*, resume: str, job_requirement: str) -> ResumeScore:
     system, user = _build_score_messages(resume=resume, job_requirement=job_requirement)
     raw = get_provider().generate(system, user)
     return _parse_score(raw)
+
+
+def score_resume_image(*, image_url: str, job_requirement: str) -> ResumeScore:
+    """读取图片简历并评分；需要当前 provider 支持图片输入。"""
+    image_url = image_url.strip()
+    job_requirement = job_requirement.strip()
+    if not image_url or not job_requirement:
+        return ResumeScore(total=100, basis="缺少图片或岗位要求，跳过评分并默认放行")
+
+    if settings.llm_provider.lower() == "mock":
+        return ResumeScore(total=100, basis="mock provider 不读取图片，默认放行")
+
+    prompt = _build_media_score_prompt(
+        media_label="图片", job_requirement=job_requirement
+    )
+    raw = get_provider().generate_with_image_url(prompt=prompt, image_url=image_url)
+    return _parse_score(raw)
+
+
+def score_resume_video(*, video_url: str, job_requirement: str) -> ResumeScore:
+    """读取视频简历并评分；需要当前 provider 支持视频输入。"""
+    video_url = video_url.strip()
+    job_requirement = job_requirement.strip()
+    if not video_url or not job_requirement:
+        return ResumeScore(total=100, basis="缺少视频或岗位要求，跳过评分并默认放行")
+
+    if settings.llm_provider.lower() == "mock":
+        return ResumeScore(total=100, basis="mock provider 不读取视频，默认放行")
+
+    prompt = _build_media_score_prompt(
+        media_label="视频", job_requirement=job_requirement
+    )
+    raw = get_provider().generate_with_video_url(prompt=prompt, video_url=video_url)
+    return _parse_score(raw)
+
+
+def _build_media_score_prompt(*, media_label: str, job_requirement: str) -> str:
+    return MEDIA_SCORING_PROMPT_TEMPLATE.replace(
+        "{{media_label}}", media_label
+    ).replace("{{job_requirement}}", job_requirement)
 
 
 def _build_score_messages(*, resume: str, job_requirement: str) -> tuple[str, str]:
