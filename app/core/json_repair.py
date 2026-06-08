@@ -13,7 +13,7 @@ import json
 import re
 from dataclasses import dataclass
 
-from app.schemas import RPA_ACTIONS, ReplyReason, ReplyResponse
+from app.schemas import RPA_ACTIONS, STAGES, ReplyReason, ReplyResponse
 
 _JSON_BLOCK = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -33,7 +33,8 @@ REPAIR_SYSTEM_PROMPT = """你是 JSON 修复器。请把输入中的模型原始
   "answer": "只有 rpa_action 为 reply_message 时填写；send_company_address 时必须为空字符串",
   "reason": {
     "rpa_action": "reply_message 或 send_company_address",
-    "basis": "简要说明依据"
+    "basis": "简要说明依据",
+    "next_stage": "可选，取值：初步接触/了解动机/能力验证/邀约/已结束，拿不准就留空字符串"
   }
 }
 
@@ -41,6 +42,7 @@ REPAIR_SYSTEM_PROMPT = """你是 JSON 修复器。请把输入中的模型原始
 - rpa_action 只能是 "reply_message" 或 "send_company_address"。
 - 如果是普通回复，rpa_action 用 "reply_message"，answer 必须有内容。
 - 如果候选人询问地址、面试地点、怎么去、到场方式，rpa_action 用 "send_company_address"，answer 必须是空字符串。
+- next_stage 只能取上述五个阶段之一或空字符串，不要臆造其它值。
 - 不要新增其它字段。"""
 
 
@@ -100,9 +102,14 @@ def parse_reply_result(raw: str) -> ParsedReply:
         basis_raw = reason_raw.get("basis", "")
         if not isinstance(basis_raw, str):
             is_valid = False
+        # next_stage 容错: 非法值置空, 由 pipeline 兜底为不推进 (不算致命错误)
+        next_stage = str(reason_raw.get("next_stage", "")).strip()
+        if next_stage and next_stage not in STAGES:
+            next_stage = ""
         reason = ReplyReason(
             rpa_action=action,
             basis=str(basis_raw).strip(),
+            next_stage=next_stage,
         )
     else:
         is_valid = False

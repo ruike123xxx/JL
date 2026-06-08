@@ -8,7 +8,18 @@ RPA_ACTIONS = {
     "send_company_address",  # 发送公司地址
 }
 
-DEFAULT_STAGE = "初次接触"
+# 招聘沟通阶段状态机 (stage 由 Python 维护, 模型每轮输出它判断的 next_stage)
+# 初步接触 -> 了解动机 -> 能力验证 -> 邀约 -> 已结束
+STAGES = {
+    "初步接触",  # 用硬实力吸引 + 筛选意向
+    "了解动机",  # 判断稳定性与求职动机 (在职/离职原因)
+    "能力验证",  # 验证核心能力匹配
+    "邀约",  # 直接邀约面试
+    "约面中",  # 已触发发送地址/确认面试, 兼容旧值
+    "已结束",  # 已约面或已礼貌退出, 不再主动推进
+}
+
+DEFAULT_STAGE = "初步接触"
 
 
 class ReplyRequest(BaseModel):
@@ -26,6 +37,9 @@ class ReplyReason(BaseModel):
 
     rpa_action: str = Field("reply_message", description="需要触发的影刀动作")
     basis: str = Field("", description="依据说明")
+    next_stage: str = Field(
+        "", description="模型判断的下一招聘阶段 (取值限 STAGES); 影刀可忽略"
+    )
 
 
 class ReplyResponse(BaseModel):

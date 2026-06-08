@@ -77,7 +77,9 @@ def score_resume(*, resume: str, job_requirement: str) -> ResumeScore:
         return _heuristic_score(resume=resume, job_requirement=job_requirement)
 
     system, user = _build_score_messages(resume=resume, job_requirement=job_requirement)
-    raw = get_provider().generate(system, user)
+    raw = get_provider().generate(
+        system, user, temperature=settings.llm_temperature_structured
+    )
     return _parse_score(raw)
 
 

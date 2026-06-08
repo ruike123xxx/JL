@@ -6,14 +6,12 @@ LLM_BASE_URL / LLM_MODEL / LLM_API_KEY, 通常无需改代码。
 
 本次为骨架: 默认 provider 是 mock, 这里填好真实调用结构, 接 key 即可启用。
 """
-import httpx
-
 from app.config import settings
-from app.llm.base import LLMProvider
+from app.llm.base import LLMProvider, post_with_retry
 
 
 class TongyiProvider(LLMProvider):
-    def generate(self, system: str, user: str) -> str:
+    def generate(self, system: str, user: str, *, temperature: float | None = None) -> str:
         if not settings.llm_api_key:
             raise RuntimeError(
                 "LLM_PROVIDER=tongyi 但未配置 LLM_API_KEY, 请在 .env 中填写。"
@@ -26,7 +24,9 @@ class TongyiProvider(LLMProvider):
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "temperature": 0.7,
+            "temperature": (
+                settings.llm_temperature_reply if temperature is None else temperature
+            ),
             # 兼容接口通常支持强制 JSON 输出; 个别模型不支持时可注释掉此行
             "response_format": {"type": "json_object"},
         }
@@ -35,8 +35,13 @@ class TongyiProvider(LLMProvider):
             "Content-Type": "application/json",
         }
 
-        resp = httpx.post(url, json=payload, headers=headers, timeout=60.0)
-        resp.raise_for_status()
-        data = resp.json()
+        data = post_with_retry(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=settings.llm_timeout,
+            max_retries=settings.llm_max_retries,
+            backoff=settings.llm_retry_backoff,
+        )
         # OpenAI 兼容格式: choices[0].message.content
         return data["choices"][0]["message"]["content"]

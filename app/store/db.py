@@ -28,8 +28,9 @@ def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS sessions (
                 candidate_id TEXT PRIMARY KEY,
-                stage        TEXT NOT NULL DEFAULT '初次接触',
+                stage        TEXT NOT NULL DEFAULT '初步接触',
                 resume       TEXT NOT NULL DEFAULT '',
+                turns        INTEGER NOT NULL DEFAULT 0,
                 updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
             )
             """
@@ -39,25 +40,26 @@ def init_db() -> None:
 def get_session(candidate_id: str) -> Optional[dict]:
     with _conn() as conn:
         row = conn.execute(
-            "SELECT candidate_id, stage, resume, updated_at FROM sessions WHERE candidate_id = ?",
+            "SELECT candidate_id, stage, resume, turns, updated_at FROM sessions WHERE candidate_id = ?",
             (candidate_id,),
         ).fetchone()
         return dict(row) if row else None
 
 
-def upsert_session(candidate_id: str, stage: str, resume: str) -> None:
+def upsert_session(candidate_id: str, stage: str, resume: str, turns: int) -> None:
     """写入或更新会话状态。"""
     with _conn() as conn:
         conn.execute(
             """
-            INSERT INTO sessions (candidate_id, stage, resume, updated_at)
-            VALUES (?, ?, ?, datetime('now'))
+            INSERT INTO sessions (candidate_id, stage, resume, turns, updated_at)
+            VALUES (?, ?, ?, ?, datetime('now'))
             ON CONFLICT(candidate_id) DO UPDATE SET
                 stage      = excluded.stage,
                 resume     = excluded.resume,
+                turns      = excluded.turns,
                 updated_at = excluded.updated_at
             """,
-            (candidate_id, stage, resume),
+            (candidate_id, stage, resume, turns),
         )
 
 
@@ -76,5 +78,6 @@ def get_or_default(candidate_id: str) -> dict:
         "candidate_id": candidate_id,
         "stage": DEFAULT_STAGE,
         "resume": "",
+        "turns": 0,
         "updated_at": None,
     }
