@@ -1,0 +1,21 @@
+# 岗位配置：影刀循环内只传 job_id，JD/公司信息由此加载
+jobs:
+  - job_id: ecommerce_ops_suzhou
+    job_title: 电商运营助理
+    job_requirement: |
+      职位描述：
+      1、负责公司各大电商平台店铺的日常运营事项，包括推广、维护、编辑等工作
+      2、配合活动节奏完成上架、优化与数据复盘
+      3、有电商运营经验优先
+    company_info: |
+      公司成立于2007年，是一家专业从事品牌服饰销售的电商企业，经营多个国内知名品牌。
+      实行单双休，工作地点在苏州。
+
+  - job_id: java_backend
+    job_title: Java开发工程师
+    job_requirement: |
+      1. 负责后端业务系统开发
+      2. 熟悉 Java、Spring Boot、MySQL
+      3. 有微服务项目经验优先
+    company_info: |
+      某科技公司，技术团队稳定，提供有竞争力的薪资与发展空间。
