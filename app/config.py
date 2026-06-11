@@ -1,5 +1,7 @@
 """集中配置: 从环境变量 / .env 读取。"""
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,7 +12,7 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
 
-    # 模型 provider: mock / tongyi / aliyun
+    # 模型 provider: mock (测试) / aliyun (生产); tongyi 为 aliyun 别名
     llm_provider: str = "aliyun"
 
     # 真实模型配置 (mock 时可留空)
@@ -30,6 +32,19 @@ class Settings(BaseSettings):
 
     # 数据库
     db_path: str = "sessions.db"
+
+    # 岗位配置
+    jobs_path: str = "jobs.yaml"
+
+    @property
+    def project_root(self) -> str:
+        return str(Path(__file__).resolve().parent.parent)
+
+    @property
+    def db_path_abs(self) -> str:
+        """解析成绝对路径, 避免 uvicorn --reload 等场景下工作目录变化导致
+        建表与查询连到不同的 sessions.db (一个有表、一个空表)。"""
+        return str(Path(self.db_path).resolve())
 
 
 settings = Settings()

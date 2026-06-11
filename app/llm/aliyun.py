@@ -18,6 +18,7 @@ class AliyunProvider(LLMProvider):
             "temperature": (
                 settings.llm_temperature_reply if temperature is None else temperature
             ),
+            "response_format": {"type": "json_object"},
         }
         return self._chat_completions(payload)
 

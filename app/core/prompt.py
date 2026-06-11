@@ -122,3 +122,42 @@ def build_messages(
         .replace("{{turn_hint}}", _turn_hint(turns))
     )
     return SYSTEM_PROMPT, user
+
+
+SCORING_REPLY_APPEND = """
+
+【简历匹配评估】
+请先根据候选人简历与岗位要求评估匹配度（0-100分），再生成回复。
+- 若 score < 60：answer 使用礼貌过滤话术，说明经历与岗位有差距，rpa_action 用 reply_message，next_stage 填"已结束"。
+- 若 score >= 60：正常按阶段沟通。
+
+输出 JSON 必须包含 score 字段：
+{
+  "score": 0,
+  "answer": "...",
+  "reason": {
+    "rpa_action": "reply_message 或 send_company_address",
+    "basis": "...",
+    "next_stage": "..."
+  }
+}"""
+
+
+def build_messages_with_scoring(
+    *,
+    conversation: str,
+    job_requirement: str,
+    resume: str,
+    company_info: str,
+    stage: str,
+    turns: int = 0,
+) -> tuple[str, str]:
+    system, user = build_messages(
+        conversation=conversation,
+        job_requirement=job_requirement,
+        resume=resume,
+        company_info=company_info,
+        stage=stage,
+        turns=turns,
+    )
+    return system + SCORING_REPLY_APPEND, user

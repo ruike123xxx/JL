@@ -143,14 +143,10 @@ def get_provider() -> LLMProvider:
         from app.llm.mock import MockProvider
 
         return MockProvider()
-    if name == "tongyi":
-        from app.llm.tongyi import TongyiProvider
-
-        return TongyiProvider()
-    if name == "aliyun":
+    if name in {"tongyi", "aliyun"}:
         from app.llm.aliyun import AliyunProvider
 
         return AliyunProvider()
     raise ValueError(
-        f"未知的 LLM_PROVIDER: {settings.llm_provider!r} (可选: mock / tongyi / aliyun)"
+        f"未知的 LLM_PROVIDER: {settings.llm_provider!r} (可选: mock / aliyun; tongyi 为 aliyun 别名)"
     )

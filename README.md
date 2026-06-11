@@ -1,9 +1,11 @@
+from rpa.rpa_main import resume_person
+
 # Boss直聘自动招聘沟通机器人
 
 RPA 做"手脚"(网页读取/输入/点击), Python 做"大脑"(拼 prompt / 调大模型 / 解析决策 / 维护会话状态)。
 
 ```
-RPA 抓未读消息+对话+简历  ──HTTP POST──▶  Python 服务  ──▶  大模型
+RPA 抓未读消息+对话+简历  ──HTTP POST /reply──▶  Python 服务  ──▶  大模型
 RPA 发送回复 / 发地址  ◀──JSON──  (answer + rpa_action)
 ```
 
@@ -11,38 +13,32 @@ RPA 发送回复 / 发地址  ◀──JSON──  (answer + rpa_action)
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env      # 默认 LLM_PROVIDER=mock, 无需任何 API key
+cp .env.example .env      # 生产默认 LLM_PROVIDER=aliyun，填 API key
 python run.py             # 启动在 http://127.0.0.1:8000
 ```
 
 打开 http://127.0.0.1:8000/docs 可看交互式接口文档。
 
+## `/reply` 工作流
+
+```mermaid
+flowchart TD
+    RPA["RPA POST /reply"] --> Route["routes.py: reply()"]
+    Route --> Pipeline["pipeline.py: handle_reply()"]
+    Pipeline --> ReadSession["读 SQLite: stage / turns / resume"]
+    ReadSession --> MergeResume["合并本轮 resume"]
+    MergeResume --> HasResume{有 resume?}
+    HasResume -->|是| ScoreResume["scoring.py: score_resume()"]
+    ScoreResume --> ScorePass{score >= 60?}
+    ScorePass -->|否| LowScoreReturn["返回过滤话术，不调模型"]
+    ScorePass -->|是| BuildPrompt["prompt.py: build_messages()"]
+    HasResume -->|否| BuildPrompt
+    BuildPrompt --> Generate["调 LLM + json_repair 解析"]
+    Generate --> AdvanceStage["推进 stage，写回 SQLite"]
+    AdvanceStage --> Response["返回 answer + reason.rpa_action"]
+```
+
 ## 接口
-
-### POST /rpa/conversation  (影刀第一步联调)
-
-用于验证影刀已经成功抓取对话记录，并把文本传到本服务。该接口只返回接收回执，不调用大模型，不生成回复。
-
-请求体:
-
-```json
-{
-  "candidate_id": "boss_user_12345",
-  "conversation": "影刀抓取的当前窗口全部可见对话文本"
-}
-```
-
-响应体:
-
-```json
-{
-  "candidate_id": "boss_user_12345",
-  "received": true,
-  "conversation_chars": 28,
-  "stage": "初次接触",
-  "next_endpoint": "/reply"
-}
-```
 
 ### POST /reply  (RPA 主接口)
 
@@ -52,127 +48,44 @@ python run.py             # 启动在 http://127.0.0.1:8000
 {
   "candidate_id": "boss_user_12345",
   "conversation": "RPA 抓取的当前窗口全部可见对话文本",
-  "resume": "候选人简历文本, 没有则传空字符串",
-  "job_requirement": "岗位招聘需求",
-  "company_info": "公司信息"
+  "resume": "",
+  "job_id": "ecommerce_ops_suzhou",
+  "job_requirement": "",
+  "company_info": "",
+  "trigger": "auto",
+  "last_message_from": "candidate"
 }
 ```
 
-> `stage`(招聘阶段)不由 RPA 传, 由 Python 按 `candidate_id` 从 SQLite 读取/维护。
+> `job_id` 从 [jobs.yaml](jobs.yaml) 加载 JD/公司信息；也可继续直接传 `job_requirement` / `company_info`。  
+> `stage` 不由 RPA 传，由 Python 按 `candidate_id` 从 SQLite 读取/维护。
 
 响应体:
 
 ```json
 {
-  "answer": "只有 rpa_action 为 reply_message 时这里才有内容",
+  "answer": "回复文本",
+  "need_resume_ocr": false,
   "reason": {
-    "rpa_action": "reply_message | send_company_address",
-    "basis": "依据说明"
+    "rpa_action": "skip | request_resume | reply_message | send_company_address",
+    "basis": "依据说明",
+    "next_stage": "了解动机"
   }
 }
 ```
 
-RPA 拿到后按 `reason.rpa_action` 分支：`reply_message` 表示发送 `answer`；`send_company_address` 表示发送地址且 `answer` 为空。索要简历由影刀主流程自行判断，不再由后端返回动作。
+RPA 按 `reason.rpa_action` 分支：
 
-如果请求里带了 `resume`，后端会先做简历匹配评分。评分低于 60 分时，直接返回 `reply_message` 过滤话术，响应结构仍保持 `answer + reason`，不会把评分细节返回给影刀。
+| rpa_action | 影刀动作 |
+|------------|----------|
+| `skip` | 不操作，下一候选人 |
+| `request_resume` | 可选发送 `answer`，点击「求简历」 |
+| `reply_message` | 键盘输入 `answer` |
+| `send_company_address` | 执行发地址预设 |
 
-后端会校验大模型输出结构。如果模型没有返回标准 `answer + reason`，Python 会内部追加一次 JSON 修复调用；修复后仍不合规时返回固定兜底结构，影刀无需重复请求。
+`need_resume_ocr=true` 且 `resume` 为空时，影刀才执行「点附件简历 → OCR → 带 `trigger=after_resume_ocr` 再调 `/reply`」。
 
-如果返回 `422 Unprocessable Entity`，说明请求体还没通过 FastAPI 校验，业务逻辑不会进入 `handle_reply()`。请确认影刀 HTTP 节点使用 `application/json`，并至少传入 `candidate_id`。
-
-影刀 Python 请求示例：
-
-```python
-import requests
-all_chat_text = "全部对话记录"
-resume_person = "候选人简历"
-job_requirement = "岗位招聘需求"
-company_info = "公司信息"
-payload = {
-    "candidate_id": "test_001",
-    "conversation": all_chat_text,
-    "resume": resume_person,
-    "job_requirement": job_requirement,
-    "company_info": company_info,
-}
-
-headers = {
-    "Content-Type": "application/json",
-}
-
-resp = requests.post(
-    "http://127.0.0.1:8000/reply",
-    json=payload,
-    headers=headers,
-)
-```
-
-### POST /resume/evaluate  (单独评价图片简历)
-
-用于单独评价图片/视频简历。可以传影刀 OCR 后的 `resume_text`，也可以在阿里云 Qwen VL 模型配置好后传 `resume_image_url` 或 `resume_video_url`；该接口只返回评分详情，不生成聊天回复。
-
-请求体:
-
-```json
-{
-  "candidate_id": "boss_user_12345",
-  "resume_text": "图片简历 OCR 后的文本内容",
-  "resume_image_url": "图片简历 URL 或 data URL，三选一",
-  "resume_video_url": "视频简历 URL 或 data URL，三选一",
-  "job_requirement": "岗位招聘需求"
-}
-```
-
-响应体:
-
-```json
-{
-  "candidate_id": "boss_user_12345",
-  "score": 72,
-  "passed": true,
-  "threshold": 60,
-  "basis": "候选人具备财务相关经验，与岗位要求部分匹配",
-  "matched": ["财务相关经验", "Excel能力"],
-  "risks": ["工厂财务经验较弱"]
-}
-```
-
-影刀 Python 请求示例：
-
-```python
-import requests
-
-payload = {
-    "candidate_id": "test_001",
-    "resume_text": resume_person,
-    "job_requirement": job_requirement,
-}
-
-resp = requests.post(
-    "http://127.0.0.1:8000/resume/evaluate",
-    json=payload,
-)
-```
-
-如果要让 Qwen VL 直接读取图片，先把 `.env` 切到 `LLM_PROVIDER=aliyun`，然后传 `resume_image_url`：
-
-```python
-payload = {
-    "candidate_id": "test_001",
-    "resume_image_url": resume_image_url,
-    "job_requirement": job_requirement,
-}
-```
-
-如果要读取视频简历，传 `resume_video_url`：
-
-```python
-payload = {
-    "candidate_id": "test_001",
-    "resume_video_url": resume_video_url,
-    "job_requirement": job_requirement,
-}
-```
+有 `resume` 时，评分与回复合并为 **一次 LLM 调用**；相同简历不重复评分（SQLite 缓存 `resume_score`）。对话指纹相同则 `skip`，避免重复回复。
 
 ### POST /reset  (调试用)
 
@@ -182,33 +95,59 @@ payload = {
 
 清除该候选人会话状态, 联调时重来用。
 
+## 影刀集成
+
+完整的逐节点改造清单（对照旧流程）与 Python/JS 参考代码见 [rpa/RPA.md](rpa/RPA.md)：
+
+- [rpa/extract_candidates.js](rpa/extract_candidates.js) — 循环外一次抓取候选人列表
+- [rpa/extract_chat.js](rpa/extract_chat.js) — 循环内一次 JS 抓取对话与元数据
+- [rpa/rpa_main.py](rpa/rpa_main.py) — 统一单循环 `/reply` 调用（接口异常自动降级 skip）
+- [rpa/rpa_after_ocr.py](rpa/rpa_after_ocr.py) — OCR 完成后二次调用
+
+## 影刀 Python 请求示例
+
+```python
+import requests
+candidate_id = ""
+all_chat_text = ""
+resume_person =  ""
+current_job_id = ""
+last_message_from = "candidate"
+payload = {
+    "candidate_id": candidate_id,
+    "conversation": all_chat_text,
+    "resume": resume_person or "",
+    "job_id": current_job_id,
+    "trigger": "auto",
+    "last_message_from": last_message_from,
+}
+
+result = requests.post("http://127.0.0.1:8000/reply", json=payload, timeout=30).json()
+rpa_action = result["reason"]["rpa_action"]
+need_resume_ocr = result.get("need_resume_ocr", False)
+content = result.get("answer", "")
+```
+
 ## 验证
 
 ```bash
-# 无简历 -> reply_message（索要简历由影刀主流程处理）
-curl -X POST localhost:8000/reply -H "Content-Type: application/json" \
-  -d '{"candidate_id":"t1","conversation":"你好，我想了解下这个岗位","resume":"","job_requirement":"Java后端","company_info":"某科技公司，单双休"}'
-
-# 问地址 -> send_company_address
-curl -X POST localhost:8000/reply -H "Content-Type: application/json" \
-  -d '{"candidate_id":"t2","conversation":"面试地点在哪里？","resume":"5年Java","job_requirement":"Java后端","company_info":"某科技公司"}'
-
 pytest tests/
 ```
 
-## 切换到阿里云 Qwen 模型
+## 模型配置
 
-阿里云百炼 DashScope 兼容 OpenAI Chat Completions 格式。改 `.env`:
+生产环境 `.env`:
 
 ```
 LLM_PROVIDER=aliyun
-LLM_API_KEY=你的阿里云百炼 API Key
+LLM_API_KEY=你的 API Key
 LLM_MODEL=qwen3-vl-plus
-LLM_VISION_MODEL=qwen3-vl-plus
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 ```
 
-`qwen3-vl-plus` 用于文本对话、评分以及图片/视频简历读取。若阿里云控制台模型名有更新，以控制台可用的 Qwen VL 视频模型为准。
+DeepSeek 等 OpenAI 兼容模型只需改 `LLM_BASE_URL` 和 `LLM_MODEL`。`LLM_PROVIDER=tongyi` 是 `aliyun` 的别名。
+
+测试时使用 `LLM_PROVIDER=mock`（pytest 已自动设置），无需 API key。
 
 ## 目录
 
@@ -217,17 +156,19 @@ app/
 ├── main.py            FastAPI 入口
 ├── config.py          配置 (.env)
 ├── schemas.py         请求/响应模型 + RPA 动作枚举
-├── api/routes.py      /reply, /rpa/conversation, /reset
-├── api/resume_evaluation.py  /resume/evaluate
+├── api/routes.py      /reply, /reset
 ├── core/
-│   ├── prompt.py      系统提示词模板 + 变量注入
-│   ├── scoring.py     简历匹配评分 + 低分过滤
+│   ├── prompt.py      系统提示词 + 合并评分回复
+│   ├── fast_path.py   skip/request_resume 前置规则
+│   ├── jobs.py        job_id 配置 lookup
+│   ├── scoring.py     简历评分
 │   ├── json_repair.py 模型 JSON 容错解析
 │   └── pipeline.py    主编排
+├── rpa/               影刀参考脚本与改造指南
+├── jobs.yaml          岗位 JD/公司配置
 ├── llm/
 │   ├── base.py        provider 抽象 + 工厂
-│   ├── mock.py        假数据 (默认)
-│   ├── aliyun.py      阿里云 Qwen provider
-│   └── tongyi.py      真实模型骨架
+│   ├── mock.py        测试专用假数据
+│   └── aliyun.py      生产 LLM provider
 └── store/db.py        SQLite 会话状态
 ```

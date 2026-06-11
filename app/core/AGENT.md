@@ -19,11 +19,11 @@
 - `_normalize_stage()` —— 未知/旧 stage 值（如旧库的"初次接触"）归一为默认 `初步接触`，防止阶段查表落空。
 
 ### scoring.py —— 简历评分
-- `score_resume(resume, job_requirement) -> ResumeScore` —— 有简历时先做 0-100 分匹配评分。
+- `score_resume(resume, job_requirement) -> ResumeScore` —— 在 `/reply` 流程内对已有简历做 0-100 分匹配评分。
 - `SCORE_PASS_THRESHOLD` —— 当前通过阈值为 `60` 分。
-- `LOW_SCORE_MESSAGE` —— 低分候选人返回给影刀发送的话术；返回结构仍是 `ReplyResponse`，不暴露 score 字段。
-- `mock` provider 下用关键词启发式评分；真实 provider 下用独立评分 prompt 调模型。
-- 同时供 `POST /resume/evaluate` 单独评价图片/视频简历使用；可传 OCR 文本、图片 URL 或视频 URL（需支持视觉/视频的 provider）。
+- `LOW_SCORE_MESSAGE` —— 低分候选人返回给影刀发送的话术。
+- 生产环境通过 LLM 评分 prompt 调模型；mock provider 在测试时返回关键词启发式评分 JSON。
+- `heuristic_score()` —— 离线关键词评分，供 mock provider 与测试复用。
 
 ### prompt.py —— 提示词模板 + 变量注入
 - `SYSTEM_PROMPT` —— HR 助手系统提示词，内置**阶段化销售型沟通框架**（五阶段状态机 + 沟通节奏铁律 + 离职原因适配话术）。**调回复风格/规则改这里。**

@@ -40,19 +40,6 @@ SCORING_USER_TEMPLATE = """岗位要求：
 
 请按评分规则输出严格 JSON。"""
 
-MEDIA_SCORING_PROMPT_TEMPLATE = """请读取{{media_label}}中的简历内容，并评价它与岗位要求的匹配度。
-
-岗位要求：
-{{job_requirement}}
-
-请按以下 JSON 格式输出，不要输出 Markdown 或额外解释：
-{
-  "score": 0,
-  "basis": "一句话说明评分依据",
-  "matched": ["匹配点1", "匹配点2"],
-  "risks": ["风险点1", "风险点2"]
-}"""
-
 
 @dataclass(frozen=True)
 class ResumeScore:
@@ -73,9 +60,6 @@ def score_resume(*, resume: str, job_requirement: str) -> ResumeScore:
     if not resume or not job_requirement:
         return ResumeScore(total=100, basis="缺少简历或岗位要求，跳过评分并默认放行")
 
-    if settings.llm_provider.lower() == "mock":
-        return _heuristic_score(resume=resume, job_requirement=job_requirement)
-
     system, user = _build_score_messages(resume=resume, job_requirement=job_requirement)
     raw = get_provider().generate(
         system, user, temperature=settings.llm_temperature_structured
@@ -83,44 +67,38 @@ def score_resume(*, resume: str, job_requirement: str) -> ResumeScore:
     return _parse_score(raw)
 
 
-def score_resume_image(*, image_url: str, job_requirement: str) -> ResumeScore:
-    """读取图片简历并评分；需要当前 provider 支持图片输入。"""
-    image_url = image_url.strip()
-    job_requirement = job_requirement.strip()
-    if not image_url or not job_requirement:
-        return ResumeScore(total=100, basis="缺少图片或岗位要求，跳过评分并默认放行")
+def heuristic_score(*, resume: str, job_requirement: str) -> ResumeScore:
+    """离线关键词评分，供 mock provider 与测试使用。"""
+    resume_lower = resume.lower()
+    job_lower = job_requirement.lower()
+    keywords = _extract_keywords(job_lower)
+    if not keywords:
+        return ResumeScore(total=100, basis="岗位要求关键词不足，默认放行")
 
-    if settings.llm_provider.lower() == "mock":
-        return ResumeScore(total=100, basis="mock provider 不读取图片，默认放行")
-
-    prompt = _build_media_score_prompt(
-        media_label="图片", job_requirement=job_requirement
+    matched = [keyword for keyword in keywords if keyword in resume_lower]
+    ratio = len(matched) / len(keywords)
+    total = int(35 + ratio * 65)
+    risks = [] if total >= SCORE_PASS_THRESHOLD else ["简历中缺少岗位核心关键词"]
+    return ResumeScore(
+        total=max(0, min(100, total)),
+        basis=f"关键词匹配 {len(matched)}/{len(keywords)}",
+        matched=matched,
+        risks=risks,
     )
-    raw = get_provider().generate_with_image_url(prompt=prompt, image_url=image_url)
-    return _parse_score(raw)
 
 
-def score_resume_video(*, video_url: str, job_requirement: str) -> ResumeScore:
-    """读取视频简历并评分；需要当前 provider 支持视频输入。"""
-    video_url = video_url.strip()
-    job_requirement = job_requirement.strip()
-    if not video_url or not job_requirement:
-        return ResumeScore(total=100, basis="缺少视频或岗位要求，跳过评分并默认放行")
-
-    if settings.llm_provider.lower() == "mock":
-        return ResumeScore(total=100, basis="mock provider 不读取视频，默认放行")
-
-    prompt = _build_media_score_prompt(
-        media_label="视频", job_requirement=job_requirement
+def heuristic_score_json(*, resume: str, job_requirement: str) -> str:
+    """返回 mock provider 可用的评分 JSON 字符串。"""
+    score = heuristic_score(resume=resume, job_requirement=job_requirement)
+    return json.dumps(
+        {
+            "score": score.total,
+            "basis": score.basis,
+            "matched": score.matched,
+            "risks": score.risks,
+        },
+        ensure_ascii=False,
     )
-    raw = get_provider().generate_with_video_url(prompt=prompt, video_url=video_url)
-    return _parse_score(raw)
-
-
-def _build_media_score_prompt(*, media_label: str, job_requirement: str) -> str:
-    return MEDIA_SCORING_PROMPT_TEMPLATE.replace(
-        "{{media_label}}", media_label
-    ).replace("{{job_requirement}}", job_requirement)
 
 
 def _build_score_messages(*, resume: str, job_requirement: str) -> tuple[str, str]:
@@ -170,25 +148,6 @@ def _string_list(value) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item).strip() for item in value if str(item).strip()]
-
-
-def _heuristic_score(*, resume: str, job_requirement: str) -> ResumeScore:
-    resume_lower = resume.lower()
-    job_lower = job_requirement.lower()
-    keywords = _extract_keywords(job_lower)
-    if not keywords:
-        return ResumeScore(total=100, basis="岗位要求关键词不足，默认放行")
-
-    matched = [keyword for keyword in keywords if keyword in resume_lower]
-    ratio = len(matched) / len(keywords)
-    total = int(35 + ratio * 65)
-    risks = [] if total >= SCORE_PASS_THRESHOLD else ["简历中缺少岗位核心关键词"]
-    return ResumeScore(
-        total=max(0, min(100, total)),
-        basis=f"mock 关键词匹配 {len(matched)}/{len(keywords)}",
-        matched=matched,
-        risks=risks,
-    )
 
 
 def _extract_keywords(text: str) -> list[str]:
